@@ -26,34 +26,28 @@
       if (value) {
         const parts = value.split(',').map(Number);
         if (parts.length === 2 && parts.every(coord => !isNaN(coord))) {
-          return [parts[1], parts[0]]; // lat, lng
+          return [parts[1], parts[0]]; // [lat, lng]
         }
       }
       return null;
     }
 
-    function getVehicleType() {
-      const urlParams = new URLSearchParams(window.location.search);
-      const type = urlParams.get('vehicle') || 'motorcycle';
-      return type;
-    }
-
-    const jenis = getVehicleType(); // "motorcycle" atau "car"
     const originLatLng = getCoordsFromURL('from') || [1.5238227, 124.8552123];
     const destinationLatLng = getCoordsFromURL('to') || [1.4582984, 124.7937911];
-    const origin = [originLatLng[1], originLatLng[0]];
-    const destination = [destinationLatLng[1], destinationLatLng[0]];
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const jenis = urlParams.get('vehicle') || 'car';
 
     const iconKendaraan = L.icon({
       iconUrl: jenis === 'car' 
-        ? 'https://cdn-icons-png.flaticon.com/512/743/743922.png' 
-        : 'https://cdn-icons-png.flaticon.com/512/1048/1048319.png',
+        ? 'https://cdn-icons-png.flaticon.com/512/743/743922.png'
+        : 'https://cdn-icons-png.flaticon.com/512/747/747376.png',
       iconSize: [32, 32],
       iconAnchor: [16, 32],
     });
 
-    const map = L.map('map').setView(originLatLng, 14);
-
+    const map = L.map('map');
+    
     L.tileLayer(
       `https://api.mapbox.com/styles/v1/mapbox/streets-v11/tiles/{z}/{x}/{y}@2x?access_token=${accessToken}`,
       {
@@ -65,7 +59,11 @@
     ).addTo(map);
 
     async function getRoute() {
+      const origin = [originLatLng[1], originLatLng[0]];
+      const destination = [destinationLatLng[1], destinationLatLng[0]];
+
       const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${origin.join(',')};${destination.join(',')}?geometries=geojson&overview=full&access_token=${accessToken}`;
+
       try {
         const response = await fetch(url);
         if (!response.ok) {
@@ -79,24 +77,30 @@
           return;
         }
 
-        const route = json.routes[0].geometry;
-        const distance = json.routes[0].distance;
+        const route = json.routes[0];
+        const distanceMeters = route.distance;
+        const distanceText = distanceMeters >= 1000
+          ? (distanceMeters / 1000).toFixed(2) + ' km'
+          : Math.round(distanceMeters) + ' m';
 
-        const distanceLabel = distance < 1000 
-          ? `${distance.toFixed(0)} meter` 
-          : `${(distance / 1000).toFixed(2)} km`;
+        // Gambar rute di peta
+        L.geoJSON(route.geometry, { style: { color: '#FF0000', weight: 5 } }).addTo(map);
 
-        L.geoJSON(route, { style: { color: '#FF0000', weight: 5 } }).addTo(map);
-
+        // Marker awal (kendaraan)
         L.marker(originLatLng, { icon: iconKendaraan })
           .addTo(map)
-          .bindPopup(`Awal (${jenis})`)
+          .bindPopup('Titik Awal')
           .openPopup();
 
+        // Marker tujuan + jarak
         L.marker(destinationLatLng)
           .addTo(map)
-          .bindPopup(`Tujuan<br>Jarak: ${distanceLabel}`)
-          .openPopup();
+          .bindPopup(`Tujuan<br>Jarak: ${distanceText}`);
+
+        // Auto fit kamera ke dua titik
+        const bounds = L.latLngBounds([originLatLng, destinationLatLng]);
+        map.fitBounds(bounds, { padding: [50, 50] });
+
       } catch (err) {
         alert('Kesalahan saat mengambil rute: ' + err);
         console.error(err);
