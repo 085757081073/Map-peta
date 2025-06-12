@@ -105,8 +105,8 @@
           );
           popupA += '<br>' + (
             jarakPengorder < 1
-              ? `${(jarakPengorder * 1000).toFixed(0)} meter dari pengorder`
-              : `${jarakPengorder.toFixed(2)} km dari pengorder`
+              ? `${(jarakPengorder * 1000).toFixed(0)} meter`
+              : `${jarakPengorder.toFixed(2)} km`
           );
         }
         markerA.bindPopup(popupA).openPopup();
