@@ -21,41 +21,32 @@
     const accessToken = 'pk.eyJ1IjoiaXJvbmFqYWxhaCIsImEiOiJjbWJpMnZhbHcwMThsMmpxdG1pc2tyNnB6In0.H1kXdAXmoFCinLAuAWBbUA';
     const urlParams = new URLSearchParams(window.location.search);
 
-    function getCoordsFromURL(param) {
-      const value = urlParams.get(param);
-      if (value) {
-        const parts = value.split(',').map(Number);
-        if (parts.length === 2 && parts.every(coord => !isNaN(coord))) {
-          return [parts[0], parts[1]]; // [lat, lng]
-        }
+    function getLatLngFromParam(param) {
+      const val = urlParams.get(param);
+      if (!val) return null;
+      const parts = val.split(',').map(Number);
+      if (parts.length === 2 && parts.every(n => !isNaN(n))) {
+        return [parts[0], parts[1]]; // [lat, lng]
       }
       return null;
     }
 
-    const originLatLng = getCoordsFromURL('from') || [1.5649439, 124.8745422];
-    const destinationLatLng = getCoordsFromURL('to') || [1.4870958, 124.8369521];
-    const origin = [originLatLng[1], originLatLng[0]];       // [lng, lat]
+    const originLatLng = getLatLngFromParam('from') || [1.5649439, 124.8745422];
+    const destinationLatLng = getLatLngFromParam('to') || [1.4870958, 124.8369521];
+    const origin = [originLatLng[1], originLatLng[0]];
     const destination = [destinationLatLng[1], destinationLatLng[0]];
 
+    const vehicleType = urlParams.get('vehicle') || 'motor';
     const jarakDriver = parseFloat(urlParams.get('jarakdriver'));
 
-    // Tentukan icon kendaraan
-    const vehicle = urlParams.get('vehicle');
-    let iconUrl = '';
-
-    switch (vehicle) {
-      case 'mobil':
-        iconUrl = 'https://cdn-icons-png.flaticon.com/128/12689/12689302.png';
-        break;
-      case 'kurir':
-        iconUrl = 'https://cdn-icons-png.flaticon.com/128/9561/9561688.png';
-        break;
-      default:
-        iconUrl = 'https://cdn-icons-png.flaticon.com/128/5811/5811823.png'; // motor
-    }
+    const iconUrls = {
+      motor: 'https://cdn-icons-png.flaticon.com/128/5811/5811823.png',
+      mobil: 'https://cdn-icons-png.flaticon.com/128/12689/12689302.png',
+      kurir: 'https://cdn-icons-png.flaticon.com/128/9561/9561688.png'
+    };
 
     const vehicleIcon = L.icon({
-      iconUrl: iconUrl,
+      iconUrl: iconUrls[vehicleType] || iconUrls.motor,
       iconSize: [40, 40],
       iconAnchor: [20, 40],
       popupAnchor: [0, -40]
@@ -64,7 +55,7 @@
     const map = L.map('map');
 
     L.tileLayer(
-      `https://api.mapbox.com/styles/v1/mapbox/streets-v11/tiles/{z}/{x}/{y}@2x?access_token=${accessToken}`,
+      https://api.mapbox.com/styles/v1/mapbox/streets-v11/tiles/{z}/{x}/{y}@2x?access_token=${accessToken},
       {
         tileSize: 512,
         zoomOffset: -1,
@@ -74,7 +65,7 @@
     ).addTo(map);
 
     async function getRoute() {
-      const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${origin.join(',')};${destination.join(',')}?geometries=geojson&overview=full&access_token=${accessToken}`;
+      const url = https://api.mapbox.com/directions/v5/mapbox/driving/${origin.join(',')};${destination.join(',')}?geometries=geojson&access_token=${accessToken};
       try {
         const response = await fetch(url);
         if (!response.ok) {
@@ -89,34 +80,33 @@
         }
 
         const route = json.routes[0].geometry;
-        const distance = json.routes[0].distance; // dalam meter
-
         L.geoJSON(route, { style: { color: '#FF0000', weight: 5 } }).addTo(map);
 
-        // Marker titik A (origin)
+        // Marker titik A (penjemputan)
         const markerA = L.marker(originLatLng, { icon: vehicleIcon }).addTo(map);
         if (!isNaN(jarakDriver)) {
-          let jarakText = jarakDriver < 1000
-            ? `${jarakDriver.toFixed(0)} meter`
-            : `${(jarakDriver / 1000).toFixed(2)} km`;
-          markerA.bindPopup(`Penjemputan<br>${jarakText}`).openPopup();
+          let jarakText = jarakDriver < 1
+            ? ${(jarakDriver * 1000).toFixed(0)} meter dari driver
+            : ${jarakDriver.toFixed(2)} km dari driver;
+          markerA.bindPopup(Penjemputan<br>${jarakText}).openPopup();
         } else {
           markerA.bindPopup('Penjemputan').openPopup();
         }
 
         // Marker titik B (tujuan)
         const markerB = L.marker(destinationLatLng).addTo(map);
-        const distanceText = distance < 1000
-          ? `${distance.toFixed(0)} meter`
-          : `${(distance / 1000).toFixed(2)} km`;
-        markerB.bindPopup(`Tujuan<br>Jarak: ${distanceText}`);
+        const distanceInKm = json.routes[0].distance / 1000;
+        const jarakTujuan = distanceInKm < 1
+          ? ${(distanceInKm * 1000).toFixed(0)} meter
+          : ${distanceInKm.toFixed(2)} km;
+        markerB.bindPopup(Tujuan<br>${jarakTujuan});
 
-        // Zoom map ke dalam bounds
+        // Fit map view
         const bounds = L.latLngBounds([originLatLng, destinationLatLng]);
         map.fitBounds(bounds, { padding: [50, 50] });
 
       } catch (err) {
-        alert('Kesalahan saat mengambil data rute: ' + err);
+        alert('Kesalahan saat mengambil rute: ' + err);
         console.error(err);
       }
     }
