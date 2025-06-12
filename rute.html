@@ -43,7 +43,7 @@
     map.fitBounds(bounds);
 
     L.tileLayer(
-      `https://api.mapbox.com/styles/v1/mapbox/streets-v11/tiles/{z}/{x}/{y}@2x?access_token=${accessToken}`,
+      https://api.mapbox.com/styles/v1/mapbox/streets-v11/tiles/{z}/{x}/{y}@2x?access_token=${accessToken},
       {
         tileSize: 512,
         zoomOffset: -1,
@@ -69,7 +69,7 @@
     });
 
     async function getRoute() {
-      const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${origin.join(',')};${destination.join(',')}?geometries=geojson&access_token=${accessToken}`;
+      const url = https://api.mapbox.com/directions/v5/mapbox/driving/${origin.join(',')};${destination.join(',')}?geometries=geojson&access_token=${accessToken};
       try {
         const response = await fetch(url);
         if (!response.ok) {
@@ -90,11 +90,11 @@
 
         // Tambahkan marker titik B
         let jarakText = distance < 1000
-          ? `${distance.toFixed(0)} meter`
-          : `${(distance / 1000).toFixed(2)} km`;
+          ? ${distance.toFixed(0)} meter
+          : ${(distance / 1000).toFixed(2)} km;
 
         L.marker(destinationLatLng).addTo(map)
-          .bindPopup(`Tujuan<br>${jarakText}`).openPopup();
+          .bindPopup(Tujuan<br>${jarakText}).openPopup();
       } catch (err) {
         alert('Kesalahan saat mengambil rute: ' + err);
         console.error(err);
@@ -112,10 +112,10 @@
     // Tampilkan popup jarak driver kalau ada
     if (!isNaN(jarakDriver)) {
       let jarakText = jarakDriver < 1000
-        ? `${jarakDriver.toFixed(0)} meter dari driver`
-        : `${(jarakDriver / 1000).toFixed(2)} km dari driver`;
+        ? ${jarakDriver.toFixed(0)} meter
+        : ${(jarakDriver / 1000).toFixed(2)} km;
 
-      markerA.bindPopup(`Penjemputan<br>${jarakText}`).openPopup();
+      markerA.bindPopup(Penjemputan<br>${jarakText}).openPopup();
     } else {
       markerA.bindPopup('Penjemputan').openPopup();
     }
