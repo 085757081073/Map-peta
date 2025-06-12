@@ -97,8 +97,8 @@
         const markerA = L.marker(originLatLng, { icon: vehicleIcon }).addTo(map);
         if (!isNaN(jarakDriver)) {
           let jarakText = jarakDriver < 1000
-            ? `${jarakDriver.toFixed(0)} meter dari driver`
-            : `${(jarakDriver / 1000).toFixed(2)} km dari driver`;
+            ? `${jarakDriver.toFixed(0)} meter`
+            : `${(jarakDriver / 1000).toFixed(2)} km`;
           markerA.bindPopup(`Penjemputan<br>${jarakText}`).openPopup();
         } else {
           markerA.bindPopup('Penjemputan').openPopup();
