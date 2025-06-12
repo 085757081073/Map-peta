@@ -19,94 +19,107 @@
 
   <script>
     const accessToken = 'pk.eyJ1IjoiaXJvbmFqYWxhaCIsImEiOiJjbWJpMnZhbHcwMThsMmpxdG1pc2tyNnB6In0.H1kXdAXmoFCinLAuAWBbUA';
+
     const urlParams = new URLSearchParams(window.location.search);
 
     function getLatLngFromParam(param) {
       const val = urlParams.get(param);
       if (!val) return null;
       const parts = val.split(',').map(Number);
-      if (parts.length === 2 && parts.every(n => !isNaN(n))) {
-        return [parts[0], parts[1]]; // [lat, lng]
-      }
-      return null;
+      return parts.length === 2 && parts.every(x => !isNaN(x)) ? [parts[0], parts[1]] : null;
     }
 
     const originLatLng = getLatLngFromParam('from') || [1.5649439, 124.8745422];
     const destinationLatLng = getLatLngFromParam('to') || [1.4870958, 124.8369521];
-    const origin = [originLatLng[1], originLatLng[0]];
-    const destination = [destinationLatLng[1], destinationLatLng[0]];
+    const orderLatLng = getLatLngFromParam('order'); // lokasi user
+    const vehicle = urlParams.get('vehicle') || 'mobil';
 
-    const vehicleType = urlParams.get('vehicle') || 'motor';
-    const jarakDriver = parseFloat(urlParams.get('jarakdriver'));
-
+    // Tentukan icon kendaraan
     const iconUrls = {
       motor: 'https://cdn-icons-png.flaticon.com/128/5811/5811823.png',
       mobil: 'https://cdn-icons-png.flaticon.com/128/12689/12689302.png',
-      kurir: 'https://cdn-icons-png.flaticon.com/128/9561/9561688.png'
+      kurir: 'https://cdn-icons-png.flaticon.com/128/9561/9561688.png',
     };
 
+    const iconUrl = iconUrls[vehicle] || iconUrls['mobil'];
+
     const vehicleIcon = L.icon({
-      iconUrl: iconUrls[vehicleType] || iconUrls.motor,
+      iconUrl: iconUrl,
       iconSize: [40, 40],
-      iconAnchor: [20, 40],
-      popupAnchor: [0, -40]
+      iconAnchor: [20, 20],
+      popupAnchor: [0, -20],
     });
 
     const map = L.map('map');
 
-    L.tileLayer(
-      https://api.mapbox.com/styles/v1/mapbox/streets-v11/tiles/{z}/{x}/{y}@2x?access_token=${accessToken},
-      {
-        tileSize: 512,
-        zoomOffset: -1,
-        maxZoom: 18,
-        attribution: '© Mapbox © OpenStreetMap',
-      }
-    ).addTo(map);
+    L.tileLayer(`https://api.mapbox.com/styles/v1/mapbox/streets-v11/tiles/{z}/{x}/{y}@2x?access_token=${accessToken}`, {
+      tileSize: 512,
+      zoomOffset: -1,
+      maxZoom: 18,
+      attribution: '© Mapbox © OpenStreetMap',
+    }).addTo(map);
+
+    // Fungsi jarak antar dua koordinat (dalam km)
+    function calculateCircleDistance(lat1, lon1, lat2, lon2) {
+      const R = 6371;
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * Math.PI / 180) *
+          Math.cos(lat2 * Math.PI / 180) *
+          Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c;
+    }
 
     async function getRoute() {
-      const url = https://api.mapbox.com/directions/v5/mapbox/driving/${origin.join(',')};${destination.join(',')}?geometries=geojson&access_token=${accessToken};
+      const origin = [originLatLng[1], originLatLng[0]];
+      const destination = [destinationLatLng[1], destinationLatLng[0]];
+
+      // Zoom otomatis sesuai 2 titik
+      map.fitBounds([originLatLng, destinationLatLng], { padding: [50, 50] });
+
+      const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${origin.join(',')};${destination.join(',')}?geometries=geojson&access_token=${accessToken}`;
+
       try {
         const response = await fetch(url);
-        if (!response.ok) {
-          alert('Gagal mengambil rute: ' + response.status);
-          return;
-        }
+        if (!response.ok) throw new Error('Gagal mengambil rute');
 
         const json = await response.json();
-        if (!json.routes || json.routes.length === 0) {
-          alert('Rute tidak ditemukan');
-          return;
-        }
+        if (!json.routes || json.routes.length === 0) throw new Error('Rute tidak ditemukan');
 
         const route = json.routes[0].geometry;
+        const jarakAB = json.routes[0].distance / 1000;
+
         L.geoJSON(route, { style: { color: '#FF0000', weight: 5 } }).addTo(map);
 
-        // Marker titik A (penjemputan)
+        // Titik A
         const markerA = L.marker(originLatLng, { icon: vehicleIcon }).addTo(map);
-        if (!isNaN(jarakDriver)) {
-          let jarakText = jarakDriver < 1
-            ? ${(jarakDriver * 1000).toFixed(0)} meter dari driver
-            : ${jarakDriver.toFixed(2)} km dari driver;
-          markerA.bindPopup(Penjemputan<br>${jarakText}).openPopup();
-        } else {
-          markerA.bindPopup('Penjemputan').openPopup();
+
+        let popupA = 'Penjemputan';
+        if (orderLatLng) {
+          const jarakPengorder = calculateCircleDistance(
+            originLatLng[0], originLatLng[1],
+            orderLatLng[0], orderLatLng[1]
+          );
+          popupA += '<br>' + (
+            jarakPengorder < 1
+              ? `${(jarakPengorder * 1000).toFixed(0)} meter dari pengorder`
+              : `${jarakPengorder.toFixed(2)} km dari pengorder`
+          );
         }
+        markerA.bindPopup(popupA).openPopup();
 
-        // Marker titik B (tujuan)
+        // Titik B
         const markerB = L.marker(destinationLatLng).addTo(map);
-        const distanceInKm = json.routes[0].distance / 1000;
-        const jarakTujuan = distanceInKm < 1
-          ? ${(distanceInKm * 1000).toFixed(0)} meter
-          : ${distanceInKm.toFixed(2)} km;
-        markerB.bindPopup(Tujuan<br>${jarakTujuan});
-
-        // Fit map view
-        const bounds = L.latLngBounds([originLatLng, destinationLatLng]);
-        map.fitBounds(bounds, { padding: [50, 50] });
-
+        let popupB = 'Tujuan<br>';
+        popupB += jarakAB < 1
+          ? `${(jarakAB * 1000).toFixed(0)} meter dari titik A`
+          : `${jarakAB.toFixed(2)} km dari titik A`;
+        markerB.bindPopup(popupB);
       } catch (err) {
-        alert('Kesalahan saat mengambil rute: ' + err);
+        alert(err.message);
         console.error(err);
       }
     }
