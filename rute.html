@@ -115,8 +115,8 @@
         const markerB = L.marker(destinationLatLng).addTo(map);
         let popupB = 'Tujuan<br>';
         popupB += jarakAB < 1
-          ? `${(jarakAB * 1000).toFixed(0)} meter dari titik A`
-          : `${jarakAB.toFixed(2)} km dari titik A`;
+          ? `${(jarakAB * 1000).toFixed(0)} meter`
+          : `${jarakAB.toFixed(2)} km`;
         markerB.bindPopup(popupB);
       } catch (err) {
         alert(err.message);
