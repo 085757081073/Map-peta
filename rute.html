@@ -15,99 +15,85 @@
   </style>
 </head>
 <body>
-  <div id="map"></div>
+<div id="map"></div>
 
-  <script>
-    const accessToken = 'pk.eyJ1IjoiaXJvbmFqYWxhaCIsImEiOiJjbWJpMnZhbHcwMThsMmpxdG1pc2tyNnB6In0.H1kXdAXmoFCinLAuAWBbUA';
+<script>
+  const accessToken = 'pk.eyJ1IjoiaXJvbmFqYWxhaCIsImEiOiJjbWJpMnZhbHcwMThsMmpxdG1pc2tyNnB6In0.H1kXdAXmoFCinLAuAWBbUA';
 
-    function getCoordsFromURL(param) {
-      const urlParams = new URLSearchParams(window.location.search);
-      const value = urlParams.get(param);
-      if (value) {
-        const parts = value.split(',').map(Number);
-        if (parts.length === 2 && parts.every(coord => !isNaN(coord))) {
-          return [parts[1], parts[0]]; // [lat, lng]
-        }
+  const urlParams = new URLSearchParams(window.location.search);
+
+  function getCoords(param) {
+    const val = urlParams.get(param);
+    if (!val) return null;
+    const parts = val.split(',').map(Number);
+    return parts.length === 2 ? [parts[1], parts[0]] : null; // [lat, lng]
+  }
+
+  const from = getCoords('from') || [1.5649439, 124.8745422];
+  const to = getCoords('to') || [1.4870958, 124.8369521];
+  const vehicle = urlParams.get('vehicle') || 'car';
+
+  // Tentukan icon kendaraan
+  const icons = {
+    motor: 'https://cdn-icons-png.flaticon.com/128/5811/5811823.png',
+    car: 'https://cdn-icons-png.flaticon.com/128/12689/12689302.png',
+    kurir: 'https://cdn-icons-png.flaticon.com/128/9561/9561688.png'
+  };
+
+  const iconUrl = icons[vehicle.toLowerCase()] || icons.car;
+
+  const map = L.map('map');
+  const bounds = L.latLngBounds(from, to);
+  map.fitBounds(bounds, { padding: [50, 50] });
+
+  L.tileLayer(`https://api.mapbox.com/styles/v1/mapbox/streets-v11/tiles/{z}/{x}/{y}@2x?access_token=${accessToken}`, {
+    tileSize: 512,
+    zoomOffset: -1,
+    maxZoom: 18,
+    attribution: '© Mapbox © OpenStreetMap',
+  }).addTo(map);
+
+  const vehicleIcon = L.icon({
+    iconUrl: iconUrl,
+    iconSize: [40, 40],
+    iconAnchor: [20, 40],
+    popupAnchor: [0, -35]
+  });
+
+  async function getRoute() {
+    const coords = [from[1], from[0]].join(',') + ';' + [to[1], to[0]].join(',');
+    const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${coords}?geometries=geojson&access_token=${accessToken}`;
+    try {
+      const response = await fetch(url);
+      const data = await response.json();
+
+      if (!data.routes || data.routes.length === 0) {
+        alert('Rute tidak ditemukan');
+        return;
       }
-      return null;
+
+      const route = data.routes[0];
+      const geojson = route.geometry;
+      const distance = route.distance; // meter
+
+      L.geoJSON(geojson, {
+        style: { color: '#FF0000', weight: 5 }
+      }).addTo(map);
+
+      // Tampilkan marker awal dengan icon kendaraan
+      L.marker(from, { icon: vehicleIcon }).addTo(map).bindPopup("Titik Awal").openPopup();
+
+      // Hitung dan tampilkan jarak di marker tujuan
+      const jarakStr = distance >= 1000 ? (distance / 1000).toFixed(2) + ' km' : Math.round(distance) + ' m';
+      L.marker(to).addTo(map).bindPopup(`Tujuan<br>Jarak: ${jarakStr}`).openPopup();
+
+    } catch (err) {
+      console.error('Error saat ambil rute:', err);
+      alert('Gagal mengambil data rute.');
     }
+  }
 
-    const originLatLng = getCoordsFromURL('from') || [1.5238227, 124.8552123];
-    const destinationLatLng = getCoordsFromURL('to') || [1.4582984, 124.7937911];
-
-    const urlParams = new URLSearchParams(window.location.search);
-    const jenis = urlParams.get('vehicle') || 'car';
-
-    const iconKendaraan = L.icon({
-      iconUrl: jenis === 'car' 
-        ? 'https://cdn-icons-png.flaticon.com/128/5811/5811823.png'
-        : 'https://cdn-icons-png.flaticon.com/128/5811/5811823.png',
-      iconSize: [32, 32],
-      iconAnchor: [16, 32],
-    });
-
-    const map = L.map('map');
-    
-    L.tileLayer(
-      `https://api.mapbox.com/styles/v1/mapbox/streets-v11/tiles/{z}/{x}/{y}@2x?access_token=${accessToken}`,
-      {
-        tileSize: 512,
-        zoomOffset: -1,
-        maxZoom: 18,
-        attribution: '© Mapbox © OpenStreetMap',
-      }
-    ).addTo(map);
-
-    async function getRoute() {
-      const origin = [originLatLng[1], originLatLng[0]];
-      const destination = [destinationLatLng[1], destinationLatLng[0]];
-
-      const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${origin.join(',')};${destination.join(',')}?geometries=geojson&overview=full&access_token=${accessToken}`;
-
-      try {
-        const response = await fetch(url);
-        if (!response.ok) {
-          alert('Gagal mengambil rute: ' + response.status);
-          return;
-        }
-
-        const json = await response.json();
-        if (!json.routes || json.routes.length === 0) {
-          alert('Rute tidak ditemukan');
-          return;
-        }
-
-        const route = json.routes[0];
-        const distanceMeters = route.distance;
-        const distanceText = distanceMeters >= 1000
-          ? (distanceMeters / 1000).toFixed(2) + ' km'
-          : Math.round(distanceMeters) + ' m';
-
-        // Gambar rute di peta
-        L.geoJSON(route.geometry, { style: { color: '#FF0000', weight: 5 } }).addTo(map);
-
-        // Marker awal (kendaraan)
-        L.marker(originLatLng, { icon: iconKendaraan })
-          .addTo(map)
-          .bindPopup('Titik Awal')
-          .openPopup();
-
-        // Marker tujuan + jarak
-        L.marker(destinationLatLng)
-          .addTo(map)
-          .bindPopup(`Tujuan<br>Jarak: ${distanceText}`);
-
-        // Auto fit kamera ke dua titik
-        const bounds = L.latLngBounds([originLatLng, destinationLatLng]);
-        map.fitBounds(bounds, { padding: [50, 50] });
-
-      } catch (err) {
-        alert('Kesalahan saat mengambil rute: ' + err);
-        console.error(err);
-      }
-    }
-
-    getRoute();
-  </script>
+  getRoute();
+</script>
 </body>
 </html>
