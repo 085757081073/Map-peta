@@ -32,13 +32,25 @@
       return null;
     }
 
-    const urlParams = new URLSearchParams(window.location.search);
-    const jenis = urlParams.get("jenis") || "motorcycle";
+    function getVehicleType() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const type = urlParams.get('vehicle') || 'motorcycle';
+      return type;
+    }
 
+    const jenis = getVehicleType(); // "motorcycle" atau "car"
     const originLatLng = getCoordsFromURL('from') || [1.5238227, 124.8552123];
     const destinationLatLng = getCoordsFromURL('to') || [1.4582984, 124.7937911];
-    const origin = [originLatLng[1], originLatLng[0]];       // [lng, lat]
+    const origin = [originLatLng[1], originLatLng[0]];
     const destination = [destinationLatLng[1], destinationLatLng[0]];
+
+    const iconKendaraan = L.icon({
+      iconUrl: jenis === 'car' 
+        ? 'https://cdn-icons-png.flaticon.com/512/743/743922.png' 
+        : 'https://cdn-icons-png.flaticon.com/512/1048/1048319.png',
+      iconSize: [32, 32],
+      iconAnchor: [16, 32],
+    });
 
     const map = L.map('map').setView(originLatLng, 14);
 
@@ -51,21 +63,6 @@
         attribution: '© Mapbox © OpenStreetMap',
       }
     ).addTo(map);
-
-    // Pilih ikon marker kendaraan
-    let iconKendaraan = L.icon({
-      iconUrl: 'https://cdn-icons-png.flaticon.com/512/744/744465.png',
-      iconSize: [32, 32],
-      iconAnchor: [16, 32],
-    });
-
-    if (jenis === 'mobil') {
-      iconKendaraan = L.icon({
-        iconUrl: 'https://cdn-icons-png.flaticon.com/512/743/743007.png',
-        iconSize: [32, 32],
-        iconAnchor: [16, 32],
-      });
-    }
 
     async function getRoute() {
       const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${origin.join(',')};${destination.join(',')}?geometries=geojson&overview=full&access_token=${accessToken}`;
@@ -83,7 +80,7 @@
         }
 
         const route = json.routes[0].geometry;
-        const distance = json.routes[0].distance; // in meters
+        const distance = json.routes[0].distance;
 
         const distanceLabel = distance < 1000 
           ? `${distance.toFixed(0)} meter` 
@@ -98,7 +95,8 @@
 
         L.marker(destinationLatLng)
           .addTo(map)
-          .bindPopup(`Tujuan<br>Jarak: ${distanceLabel}`);
+          .bindPopup(`Tujuan<br>Jarak: ${distanceLabel}`)
+          .openPopup();
       } catch (err) {
         alert('Kesalahan saat mengambil rute: ' + err);
         console.error(err);
