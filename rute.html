@@ -2,12 +2,9 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Test Mapbox Route Leaflet</title>
+  <title>Rute Mapbox Dinamis</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link
-    rel="stylesheet"
-    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-  />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <style>
     html, body, #map {
@@ -21,15 +18,28 @@
   <div id="map"></div>
 
   <script>
-    // Ganti dengan token Mapbox kamu (public token dengan directions:read permission)
+    // Token Mapbox kamu
     const accessToken = 'pk.eyJ1IjoiaXJvbmFqYWxhaCIsImEiOiJjbWJpMnZhbHcwMThsMmpxdG1pc2tyNnB6In0.H1kXdAXmoFCinLAuAWBbUA';
 
-    // Koordinat dalam format [longitude, latitude]
-    const origin = [124.8552123,1.5238227];
-    const destination = [124.7937911,1.4582984];
+    // Ambil koordinat dari URL, misalnya ?from=-6.2,106.8&to=-6.3,106.9
+    function getCoordsFromURL(param) {
+      const urlParams = new URLSearchParams(window.location.search);
+      const value = urlParams.get(param);
+      if (value) {
+        const parts = value.split(',').map(Number);
+        if (parts.length === 2 && parts.every(coord => !isNaN(coord))) {
+          return [parts[1], parts[0]]; // lat, lng
+        }
+      }
+      return null;
+    }
 
-    // Inisialisasi peta
-    const map = L.map('map').setView([origin[1], origin[0]], 15);
+    const originLatLng = getCoordsFromURL('from') || [1.5238227, 124.8552123];
+    const destinationLatLng = getCoordsFromURL('to') || [1.4582984, 124.7937911];
+    const origin = [originLatLng[1], originLatLng[0]];       // [lng, lat]
+    const destination = [destinationLatLng[1], destinationLatLng[0]];
+
+    const map = L.map('map').setView(originLatLng, 14);
 
     L.tileLayer(
       `https://api.mapbox.com/styles/v1/mapbox/streets-v11/tiles/{z}/{x}/{y}@2x?access_token=${accessToken}`,
@@ -42,42 +52,27 @@
     ).addTo(map);
 
     async function getRoute() {
-      const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${origin.join(
-        ','
-      )};${destination.join(',')}?geometries=geojson&access_token=${accessToken}`;
-      console.log('Request URL:', url);
-
+      const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${origin.join(',')};${destination.join(',')}?geometries=geojson&access_token=${accessToken}`;
       try {
         const response = await fetch(url);
-        console.log('Response status:', response.status);
-
         if (!response.ok) {
           alert('Gagal mengambil rute: ' + response.status);
           return;
         }
 
         const json = await response.json();
-        console.log('Response JSON:', json);
-
         if (!json.routes || json.routes.length === 0) {
           alert('Rute tidak ditemukan');
           return;
         }
 
         const route = json.routes[0].geometry;
+        L.geoJSON(route, { style: { color: '#FF0000', weight: 5 } }).addTo(map);
 
-        L.geoJSON(route, {
-          style: { color: '#FF0000', weight: 5 },
-        }).addTo(map);
-
-        L.marker([origin[1], origin[0]])
-          .addTo(map)
-          .bindPopup('mulai')
-          .openPopup();
-
-        L.marker([destination[1], destination[0]]).addTo(map).bindPopup('End');
+        L.marker(originLatLng).addTo(map).bindPopup('Awal').openPopup();
+        L.marker(destinationLatLng).addTo(map).bindPopup('Tujuan');
       } catch (err) {
-        alert('Kesalahan saat mengambil data rute: ' + err);
+        alert('Kesalahan saat mengambil rute: ' + err);
         console.error(err);
       }
     }
