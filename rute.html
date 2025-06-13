@@ -97,7 +97,6 @@
         // Titik A
         const markerA = L.marker(originLatLng, { icon: vehicleIcon }).addTo(map);
 
-        let popupA = 'Penjemputan';
         if (orderLatLng) {
           const jarakPengorder = calculateCircleDistance(
             originLatLng[0], originLatLng[1],
@@ -113,7 +112,6 @@
 
         // Titik B
         const markerB = L.marker(destinationLatLng).addTo(map);
-        let popupB = 'Tujuan<br>';
         popupB += jarakAB < 1
           ? `${(jarakAB * 1000).toFixed(0)} meter`
           : `${jarakAB.toFixed(2)} km`;
