@@ -113,7 +113,7 @@
 
         // Titik B
         const markerB = L.marker(destinationLatLng).addTo(map);
-        let popupB =';
+        let popupB = 'Tujuan<br>';
         popupB += jarakAB < 1
           ? `${(jarakAB * 1000).toFixed(0)} meter`
           : `${jarakAB.toFixed(2)} km`;
