@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Rute Mapbox Dinamis</title>
+  <title>Rute Mapbox Dinamis via URL Token</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -10,7 +10,6 @@
     html, body, #map {
       height: 100%;
       margin: 0;
-      padding: 0;
     }
   </style>
 </head>
@@ -19,16 +18,7 @@
 
   <script>
     const urlParams = new URLSearchParams(window.location.search);
-
-    // Ambil access token dari URL
     const accessToken = urlParams.get('token');
-
-    // Hapus token dari URL supaya tidak terlihat
-    if (window.history && window.history.replaceState) {
-      const newUrl = window.location.origin + window.location.pathname + 
-        window.location.search.replace(/([?&])token=[^&]+(&|$)/, '$1').replace(/&$/, '');
-      window.history.replaceState({}, document.title, newUrl);
-    }
 
     function getLatLngFromParam(param) {
       const val = urlParams.get(param);
@@ -37,10 +27,10 @@
       return parts.length === 2 && parts.every(x => !isNaN(x)) ? [parts[0], parts[1]] : null;
     }
 
-    const originLatLng = getLatLngFromParam('from') || [1.5649439, 124.8745422];
-    const destinationLatLng = getLatLngFromParam('to') || [1.4870958, 124.8369521];
+    const originLatLng = getLatLngFromParam('from') || [1.5649, 124.8745];
+    const destinationLatLng = getLatLngFromParam('to') || [1.4870, 124.8369];
     const orderLatLng = getLatLngFromParam('order');
-    const vehicle = urlParams.get('vehicle') || 'mobil';
+    const vehicle = urlParams.get('vehicle') || 'motor';
 
     const iconUrls = {
       motor: 'https://cdn-icons-png.flaticon.com/128/5811/5811823.png',
@@ -48,17 +38,13 @@
       kurir: 'https://cdn-icons-png.flaticon.com/128/9561/9561688.png',
     };
 
-    const iconUrl = iconUrls[vehicle] || iconUrls['mobil'];
-
     const vehicleIcon = L.icon({
-      iconUrl: iconUrl,
+      iconUrl: iconUrls[vehicle] || iconUrls['motor'],
       iconSize: [40, 40],
       iconAnchor: [20, 20],
-      popupAnchor: [0, -20],
     });
 
     const map = L.map('map');
-
     L.tileLayer(`https://api.mapbox.com/styles/v1/mapbox/streets-v11/tiles/{z}/{x}/{y}@2x?access_token=${accessToken}`, {
       tileSize: 512,
       zoomOffset: -1,
@@ -66,15 +52,15 @@
       attribution: '© Mapbox © OpenStreetMap',
     }).addTo(map);
 
+    map.fitBounds([originLatLng, destinationLatLng], { padding: [50, 50] });
+
     function calculateCircleDistance(lat1, lon1, lat2, lon2) {
       const R = 6371;
       const dLat = (lat2 - lat1) * Math.PI / 180;
       const dLon = (lon2 - lon1) * Math.PI / 180;
-      const a =
-        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-        Math.cos(lat1 * Math.PI / 180) *
-        Math.cos(lat2 * Math.PI / 180) *
-        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                Math.sin(dLon / 2) * Math.sin(dLon / 2);
       const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
       return R * c;
     }
@@ -82,47 +68,45 @@
     async function getRoute() {
       const origin = [originLatLng[1], originLatLng[0]];
       const destination = [destinationLatLng[1], destinationLatLng[0]];
-
-      map.fitBounds([originLatLng, destinationLatLng], { padding: [50, 50] });
-
       const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${origin.join(',')};${destination.join(',')}?geometries=geojson&access_token=${accessToken}`;
 
       try {
         const response = await fetch(url);
-        if (!response.ok) throw new Error('Gagal mengambil rute');
-
         const json = await response.json();
-        if (!json.routes || json.routes.length === 0) throw new Error('Rute tidak ditemukan');
-
         const route = json.routes[0].geometry;
-        const jarakAB = json.routes[0].distance / 1000;
+        const jarak = json.routes[0].distance;
+        const durasi = json.routes[0].duration;
 
+        // Kirim ke Kodular
+        const data = {
+          jarak: jarak.toFixed(0),
+          durasi: durasi.toFixed(0)
+        };
+        window.WebViewInterface?.setWebViewString(JSON.stringify(data));
+        window.ReactNativeWebView?.postMessage(JSON.stringify(data));
+
+        // Tampilkan rute
         L.geoJSON(route, { style: { color: '#FF0000', weight: 5 } }).addTo(map);
 
-        // Titik A
+        // Marker A
         const markerA = L.marker(originLatLng, { icon: vehicleIcon }).addTo(map);
+        let popupA = '';
         if (orderLatLng) {
           const jarakPengorder = calculateCircleDistance(
             originLatLng[0], originLatLng[1],
             orderLatLng[0], orderLatLng[1]
           );
-          markerA.bindPopup(
-            jarakPengorder < 1
-              ? `${(jarakPengorder * 1000).toFixed(0)} meter`
-              : `${jarakPengorder.toFixed(2)} km`
-          ).openPopup();
+          popupA = jarakPengorder < 1
+            ? `${(jarakPengorder * 1000).toFixed(0)} meter`
+            : `${jarakPengorder.toFixed(2)} km`;
         }
+        markerA.bindPopup(popupA).openPopup();
 
-        // Titik B
+        // Marker B
         const markerB = L.marker(destinationLatLng).addTo(map);
-        markerB.bindPopup(
-          jarakAB < 1
-            ? `${(jarakAB * 1000).toFixed(0)} meter`
-            : `${jarakAB.toFixed(2)} km`
-        );
+        markerB.bindPopup(jarak < 1000 ? `${jarak.toFixed(0)} meter` : `${(jarak / 1000).toFixed(2)} km`);
       } catch (err) {
-        alert(err.message);
-        console.error(err);
+        alert('Rute gagal dimuat.');
       }
     }
 
