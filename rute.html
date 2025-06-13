@@ -2,69 +2,111 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Mapbox Rute</title>
+  <title>Rute Mapbox Dinamis</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <script src="https://api.mapbox.com/mapbox-gl-js/v2.14.1/mapbox-gl.js"></script>
-  <link href="https://api.mapbox.com/mapbox-gl-js/v2.14.1/mapbox-gl.css" rel="stylesheet" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <style>
-    body, html { margin: 0; padding: 0; height: 100%; }
-    #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+    html, body, #map { height: 100%; margin: 0; padding: 0; }
   </style>
 </head>
 <body>
-<div id="map"></div>
+  <div id="map"></div>
+  <script>
+    const urlParams = new URLSearchParams(window.location.search);
+    const token = urlParams.get('token');
 
-<script>
-  const urlParams = new URLSearchParams(window.location.search);
-  const from = urlParams.get("from")?.split(",");
-  const to = urlParams.get("to")?.split(",");
-  const token = urlParams.get("token");
+    // Hilangkan token dari URL
+    if (window.history && window.history.replaceState) {
+      const newUrl = window.location.origin + window.location.pathname + 
+        window.location.search.replace(/([?&])token=[^&]+(&|$)/, '$1').replace(/&$/, '');
+      window.history.replaceState({}, document.title, newUrl);
+    }
 
-  mapboxgl.accessToken = token;
-  const map = new mapboxgl.Map({
-    container: "map",
-    style: "mapbox://styles/mapbox/streets-v12",
-    center: from.map(Number),
-    zoom: 13
-  });
+    const getLatLng = (key) => {
+      const val = urlParams.get(key);
+      if (!val) return null;
+      const [lat, lng] = val.split(',').map(Number);
+      return (!isNaN(lat) && !isNaN(lng)) ? [lat, lng] : null;
+    };
 
-  map.on("load", () => {
-    fetch(`https://api.mapbox.com/directions/v5/mapbox/driving/${from[1]},${from[0]};${to[1]},${to[0]}?geometries=geojson&access_token=${token}`)
-      .then((res) => res.json())
-      .then((data) => {
-        const route = data.routes[0];
-        const geojson = {
-          type: "Feature",
-          geometry: route.geometry
-        };
+    const from = getLatLng('from') || [-6.2, 106.8];
+    const to = getLatLng('to') || [-6.25, 106.85];
+    const order = getLatLng('order');
+    const vehicle = urlParams.get('vehicle') || 'mobil';
 
-        map.addSource("route", {
-          type: "geojson",
-          data: geojson
-        });
+    const iconUrls = {
+      motor: 'https://cdn-icons-png.flaticon.com/128/5811/5811823.png',
+      mobil: 'https://cdn-icons-png.flaticon.com/128/12689/12689302.png',
+      kurir: 'https://cdn-icons-png.flaticon.com/128/9561/9561688.png',
+    };
 
-        map.addLayer({
-          id: "route",
-          type: "line",
-          source: "route",
-          layout: { "line-join": "round", "line-cap": "round" },
-          paint: { "line-color": "#ff0000", "line-width": 5 }
-        });
+    const iconUrl = iconUrls[vehicle] || iconUrls.mobil;
+    const vehicleIcon = L.icon({
+      iconUrl, iconSize: [40, 40], iconAnchor: [20, 20], popupAnchor: [0, -20]
+    });
 
-        // Tampilkan marker
-        new mapboxgl.Marker({ color: "green" }).setLngLat([from[1], from[0]]).addTo(map);
-        new mapboxgl.Marker({ color: "red" }).setLngLat([to[1], to[0]]).addTo(map);
+    const map = L.map('map');
+    L.tileLayer(`https://api.mapbox.com/styles/v1/mapbox/streets-v11/tiles/{z}/{x}/{y}@2x?access_token=${token}`, {
+      tileSize: 512, zoomOffset: -1, maxZoom: 18,
+      attribution: '© Mapbox © OpenStreetMap'
+    }).addTo(map);
 
-        // Kirim data ke Kodular
-        const output = {
-          jarak: (route.distance / 1000).toFixed(2) + " km",
-          durasi: Math.round(route.duration / 60) + " menit"
+    function hitungJarak(lat1, lon1, lat2, lon2) {
+      const R = 6371;
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    }
+
+    async function getRoute() {
+      const coordFrom = [from[1], from[0]];
+      const coordTo = [to[1], to[0]];
+      const apiUrl = `https://api.mapbox.com/directions/v5/mapbox/driving/${coordFrom.join(',')};${coordTo.join(',')}?geometries=geojson&access_token=${token}`;
+
+      map.fitBounds([from, to], { padding: [50, 50] });
+
+      try {
+        const res = await fetch(apiUrl);
+        const data = await res.json();
+        if (!data.routes || data.routes.length === 0) throw new Error('Rute tidak ditemukan');
+
+        const rute = data.routes[0].geometry;
+        const jarak = data.routes[0].distance / 1000;
+        const durasi = data.routes[0].duration / 60;
+
+        L.geoJSON(rute, { style: { color: '#FF0000', weight: 5 } }).addTo(map);
+
+        const markerA = L.marker(from, { icon: vehicleIcon }).addTo(map);
+        if (order) {
+          const jrkOrder = hitungJarak(from[0], from[1], order[0], order[1]);
+          markerA.bindPopup(
+            jrkOrder < 1 ? `${(jrkOrder * 1000).toFixed(0)} m` : `${jrkOrder.toFixed(2)} km`
+          ).openPopup();
+        }
+
+        const markerB = L.marker(to).addTo(map);
+        markerB.bindPopup(
+          jarak < 1 ? `${(jarak * 1000).toFixed(0)} m` : `${jarak.toFixed(2)} km`
+        );
+
+        // Kirim ke Kodular
+        const hasil = {
+          jarak: jarak.toFixed(2),
+          durasi: durasi.toFixed(2)
         };
         if (window.AppInventor) {
-          window.AppInventor.setWebViewString(JSON.stringify(output));
+          window.AppInventor.setWebViewString(JSON.stringify(hasil));
         }
-      });
-  });
-</script>
+
+      } catch (err) {
+        alert(err.message);
+        console.error(err);
+      }
+    }
+
+    getRoute();
+  </script>
 </body>
 </html>
