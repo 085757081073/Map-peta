@@ -2,115 +2,69 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Rute Mapbox Dinamis via URL Token</title>
+  <title>Mapbox Rute</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://api.mapbox.com/mapbox-gl-js/v2.14.1/mapbox-gl.js"></script>
+  <link href="https://api.mapbox.com/mapbox-gl-js/v2.14.1/mapbox-gl.css" rel="stylesheet" />
   <style>
-    html, body, #map {
-      height: 100%;
-      margin: 0;
-    }
+    body, html { margin: 0; padding: 0; height: 100%; }
+    #map { position: absolute; top: 0; bottom: 0; width: 100%; }
   </style>
 </head>
 <body>
-  <div id="map"></div>
+<div id="map"></div>
 
-  <script>
-    const urlParams = new URLSearchParams(window.location.search);
-    const accessToken = urlParams.get('token');
+<script>
+  const urlParams = new URLSearchParams(window.location.search);
+  const from = urlParams.get("from")?.split(",");
+  const to = urlParams.get("to")?.split(",");
+  const token = urlParams.get("token");
 
-    function getLatLngFromParam(param) {
-      const val = urlParams.get(param);
-      if (!val) return null;
-      const parts = val.split(',').map(Number);
-      return parts.length === 2 && parts.every(x => !isNaN(x)) ? [parts[0], parts[1]] : null;
-    }
+  mapboxgl.accessToken = token;
+  const map = new mapboxgl.Map({
+    container: "map",
+    style: "mapbox://styles/mapbox/streets-v12",
+    center: from.map(Number),
+    zoom: 13
+  });
 
-    const originLatLng = getLatLngFromParam('from') || [1.5649, 124.8745];
-    const destinationLatLng = getLatLngFromParam('to') || [1.4870, 124.8369];
-    const orderLatLng = getLatLngFromParam('order');
-    const vehicle = urlParams.get('vehicle') || 'motor';
-
-    const iconUrls = {
-      motor: 'https://cdn-icons-png.flaticon.com/128/5811/5811823.png',
-      mobil: 'https://cdn-icons-png.flaticon.com/128/12689/12689302.png',
-      kurir: 'https://cdn-icons-png.flaticon.com/128/9561/9561688.png',
-    };
-
-    const vehicleIcon = L.icon({
-      iconUrl: iconUrls[vehicle] || iconUrls['motor'],
-      iconSize: [40, 40],
-      iconAnchor: [20, 20],
-    });
-
-    const map = L.map('map');
-    L.tileLayer(`https://api.mapbox.com/styles/v1/mapbox/streets-v11/tiles/{z}/{x}/{y}@2x?access_token=${accessToken}`, {
-      tileSize: 512,
-      zoomOffset: -1,
-      maxZoom: 18,
-      attribution: '© Mapbox © OpenStreetMap',
-    }).addTo(map);
-
-    map.fitBounds([originLatLng, destinationLatLng], { padding: [50, 50] });
-
-    function calculateCircleDistance(lat1, lon1, lat2, lon2) {
-      const R = 6371;
-      const dLat = (lat2 - lat1) * Math.PI / 180;
-      const dLon = (lon2 - lon1) * Math.PI / 180;
-      const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-                Math.sin(dLon / 2) * Math.sin(dLon / 2);
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      return R * c;
-    }
-
-    async function getRoute() {
-      const origin = [originLatLng[1], originLatLng[0]];
-      const destination = [destinationLatLng[1], destinationLatLng[0]];
-      const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${origin.join(',')};${destination.join(',')}?geometries=geojson&access_token=${accessToken}`;
-
-      try {
-        const response = await fetch(url);
-        const json = await response.json();
-        const route = json.routes[0].geometry;
-        const jarak = json.routes[0].distance;
-        const durasi = json.routes[0].duration;
-
-        // Kirim ke Kodular
-        const data = {
-          jarak: jarak.toFixed(0),
-          durasi: durasi.toFixed(0)
+  map.on("load", () => {
+    fetch(`https://api.mapbox.com/directions/v5/mapbox/driving/${from[1]},${from[0]};${to[1]},${to[0]}?geometries=geojson&access_token=${token}`)
+      .then((res) => res.json())
+      .then((data) => {
+        const route = data.routes[0];
+        const geojson = {
+          type: "Feature",
+          geometry: route.geometry
         };
-        window.WebViewInterface?.setWebViewString(JSON.stringify(data));
-        window.ReactNativeWebView?.postMessage(JSON.stringify(data));
 
-        // Tampilkan rute
-        L.geoJSON(route, { style: { color: '#FF0000', weight: 5 } }).addTo(map);
+        map.addSource("route", {
+          type: "geojson",
+          data: geojson
+        });
 
-        // Marker A
-        const markerA = L.marker(originLatLng, { icon: vehicleIcon }).addTo(map);
-        let popupA = '';
-        if (orderLatLng) {
-          const jarakPengorder = calculateCircleDistance(
-            originLatLng[0], originLatLng[1],
-            orderLatLng[0], orderLatLng[1]
-          );
-          popupA = jarakPengorder < 1
-            ? `${(jarakPengorder * 1000).toFixed(0)} meter`
-            : `${jarakPengorder.toFixed(2)} km`;
+        map.addLayer({
+          id: "route",
+          type: "line",
+          source: "route",
+          layout: { "line-join": "round", "line-cap": "round" },
+          paint: { "line-color": "#ff0000", "line-width": 5 }
+        });
+
+        // Tampilkan marker
+        new mapboxgl.Marker({ color: "green" }).setLngLat([from[1], from[0]]).addTo(map);
+        new mapboxgl.Marker({ color: "red" }).setLngLat([to[1], to[0]]).addTo(map);
+
+        // Kirim data ke Kodular
+        const output = {
+          jarak: (route.distance / 1000).toFixed(2) + " km",
+          durasi: Math.round(route.duration / 60) + " menit"
+        };
+        if (window.AppInventor) {
+          window.AppInventor.setWebViewString(JSON.stringify(output));
         }
-        markerA.bindPopup(popupA).openPopup();
-
-        // Marker B
-        const markerB = L.marker(destinationLatLng).addTo(map);
-        markerB.bindPopup(jarak < 1000 ? `${jarak.toFixed(0)} meter` : `${(jarak / 1000).toFixed(2)} km`);
-      } catch (err) {
-        alert('Rute gagal dimuat.');
-      }
-    }
-
-    getRoute();
-  </script>
+      });
+  });
+</script>
 </body>
 </html>
