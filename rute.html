@@ -16,7 +16,6 @@
     const urlParams = new URLSearchParams(window.location.search);
     const token = urlParams.get('token');
 
-    // Hilangkan token dari URL
     if (window.history && window.history.replaceState) {
       const newUrl = window.location.origin + window.location.pathname + 
         window.location.search.replace(/([?&])token=[^&]+(&|$)/, '$1').replace(/&$/, '');
@@ -101,8 +100,14 @@
         }
 
       } catch (err) {
-        alert(err.message);
         console.error(err);
+
+        const errorMessage = "Gagal mengambil rute. Cek koneksi atau token.";
+        if (window.AppInventor) {
+          window.AppInventor.setWebViewString(JSON.stringify({ error: errorMessage }));
+        } else {
+          alert(errorMessage);
+        }
       }
     }
 
