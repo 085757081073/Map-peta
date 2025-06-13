@@ -18,9 +18,17 @@
   <div id="map"></div>
 
   <script>
-    const accessToken = 'pk.eyJ1IjoiaXJvbmFqYWxhaCIsImEiOiJjbWJpMnZhbHcwMThsMmpxdG1pc2tyNnB6In0.H1kXdAXmoFCinLAuAWBbUA';
-
     const urlParams = new URLSearchParams(window.location.search);
+
+    // Ambil access token dari URL
+    const accessToken = urlParams.get('token');
+
+    // Hapus token dari URL supaya tidak terlihat
+    if (window.history && window.history.replaceState) {
+      const newUrl = window.location.origin + window.location.pathname + 
+        window.location.search.replace(/([?&])token=[^&]+(&|$)/, '$1').replace(/&$/, '');
+      window.history.replaceState({}, document.title, newUrl);
+    }
 
     function getLatLngFromParam(param) {
       const val = urlParams.get(param);
@@ -31,7 +39,7 @@
 
     const originLatLng = getLatLngFromParam('from') || [1.5649439, 124.8745422];
     const destinationLatLng = getLatLngFromParam('to') || [1.4870958, 124.8369521];
-    const orderLatLng = getLatLngFromParam('order'); // lokasi user
+    const orderLatLng = getLatLngFromParam('order');
     const vehicle = urlParams.get('vehicle') || 'mobil';
 
     const iconUrls = {
@@ -91,26 +99,27 @@
 
         L.geoJSON(route, { style: { color: '#FF0000', weight: 5 } }).addTo(map);
 
-        // Titik A (penjemputan)
+        // Titik A
         const markerA = L.marker(originLatLng, { icon: vehicleIcon }).addTo(map);
         if (orderLatLng) {
           const jarakPengorder = calculateCircleDistance(
             originLatLng[0], originLatLng[1],
             orderLatLng[0], orderLatLng[1]
           );
-          const text = jarakPengorder < 1
-            ? `${(jarakPengorder * 1000).toFixed(0)} meter`
-            : `${jarakPengorder.toFixed(2)} km`;
-          markerA.bindPopup(text).openPopup();
+          markerA.bindPopup(
+            jarakPengorder < 1
+              ? `${(jarakPengorder * 1000).toFixed(0)} meter`
+              : `${jarakPengorder.toFixed(2)} km`
+          ).openPopup();
         }
 
-        // Titik B (tujuan)
+        // Titik B
         const markerB = L.marker(destinationLatLng).addTo(map);
-        const textB = jarakAB < 1
-          ? `${(jarakAB * 1000).toFixed(0)} meter`
-          : `${jarakAB.toFixed(2)} km`;
-        markerB.bindPopup(textB);
-
+        markerB.bindPopup(
+          jarakAB < 1
+            ? `${(jarakAB * 1000).toFixed(0)} meter`
+            : `${jarakAB.toFixed(2)} km`
+        );
       } catch (err) {
         alert(err.message);
         console.error(err);
